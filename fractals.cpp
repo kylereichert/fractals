@@ -16,6 +16,11 @@
 #include <cmath>
 #include "math.h"
 
+float map_pixel(float new_lbound, float new_ubound, int current_pixel, float size) {
+   float new_mapping  = new_lbound + ((float)current_pixel / size) * (new_ubound - new_lbound);
+   return new_mapping;
+}
+
 std::vector<uint32_t> mandelbrot(int WIDTH, 
                                  int HEIGHT,
                                  std::vector<uint32_t>& pixels,
@@ -31,8 +36,8 @@ std::vector<uint32_t> mandelbrot(int WIDTH,
           int iters = 0;
 
           // Maps the coordinates to the window's pixel counts
-          double cr = x_lbound + ((double)x / WIDTH)  * (x_ubound - x_lbound);
-          double ci = y_lbound + ((double)y / HEIGHT) * (y_ubound - y_lbound);
+          float cr = map_pixel(x_lbound, x_ubound, x, WIDTH);
+          float ci = map_pixel(y_lbound, y_ubound, y, HEIGHT);
 
           // The actual Mandelbrot algorithm
           while (zr*zr + zi*zi < 4.0 && iters < max_iters) {
@@ -136,8 +141,8 @@ int main(int argc, char* argv[]) {
 
     // Coordinate locations at mouse cursor
     SDL_GetMouseState(&mouse_x, &mouse_y);
-    mouse_real = x_lbound + (mouse_x / WIDTH) * (x_ubound - x_lbound);
-    mouse_imag = y_lbound + (mouse_y / HEIGHT) * (y_ubound - y_lbound);
+    mouse_real = map_pixel(x_lbound, x_ubound, mouse_x, WIDTH);
+    mouse_imag = map_pixel(y_lbound, y_ubound, mouse_y, HEIGHT);
 
     // Clear old frame -> render new frame -> render over top of that frame
     SDL_RenderClear(renderer);
@@ -201,7 +206,16 @@ int main(int argc, char* argv[]) {
                                       new_y_lbound, new_y_ubound);
 
 
+      float mouse_real_zoom = map_pixel(new_x_lbound, new_x_ubound, mouse_x, WIDTH);
+      float mouse_imag_zoom = map_pixel(new_y_lbound, new_y_ubound, mouse_y, HEIGHT);
+
+      SDL_RenderClear(renderer);
       SDL_UpdateTexture(texture, NULL, pixels.data(), WIDTH * sizeof(uint32_t));
+      // SDL_RenderDebugTextFormat(renderer, 10.0f, 10.0f, "Location: %4.2f, %4.2f", mouse_real_zoom, -mouse_imag_zoom);
+      x_lbound = new_x_lbound;
+      x_ubound = new_x_ubound;
+      y_lbound = new_y_lbound;
+      y_ubound = new_y_ubound;
 
 
 
