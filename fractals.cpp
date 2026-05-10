@@ -16,8 +16,8 @@
 #include <cmath>
 #include "math.h"
 
-float map_pixel(float new_lbound, float new_ubound, int current_pixel, float size) {
-   float new_mapping  = new_lbound + ((float)current_pixel / size) * (new_ubound - new_lbound);
+double map_pixel(double new_lbound, double new_ubound, int current_pixel, double size) {
+   double new_mapping  = new_lbound + ((double)current_pixel / size) * (new_ubound - new_lbound);
    return new_mapping;
 }
 
@@ -28,7 +28,7 @@ std::vector<uint32_t> mandelbrot(int WIDTH,
                                  double y_lbound = -1.5, double y_ubound = 1.5
                                  ) {
   double SCALE = 50;
-  int max_iters = 100;
+  int max_iters = 400;
 
   for (int x = 0; x < WIDTH; x++) {
       for (int y = 0; y < HEIGHT; y++) {
@@ -36,8 +36,8 @@ std::vector<uint32_t> mandelbrot(int WIDTH,
           int iters = 0;
 
           // Maps the coordinates to the window's pixel counts
-          float cr = map_pixel(x_lbound, x_ubound, x, WIDTH);
-          float ci = map_pixel(y_lbound, y_ubound, y, HEIGHT);
+          double cr = map_pixel(x_lbound, x_ubound, x, WIDTH);
+          double ci = map_pixel(y_lbound, y_ubound, y, HEIGHT);
 
           // The actual Mandelbrot algorithm
           while (zr*zr + zi*zi < 4.0 && iters < max_iters) {
@@ -105,13 +105,13 @@ int main(int argc, char* argv[]) {
 
   // Declarations for mouse location info
   float mouse_x, mouse_y;
-  float mouse_real, mouse_imag;
+  double mouse_real, mouse_imag;
   // double cr = x_lbound + ((double)x / WIDTH)  * (x_ubound - x_lbound);
 
   bool dragging = false;
   bool drag_release = false;
-  float drag_start_x, drag_start_y;
-  float drag_end_x, drag_end_y;
+  double drag_start_x, drag_start_y;
+  double drag_end_x, drag_end_y;
 
 
   // 3. The Main Loop
@@ -152,13 +152,15 @@ int main(int argc, char* argv[]) {
 
     if (dragging) {
       // New boundaries for rectangle and zoom
-      float new_x_lbound = drag_start_x;
-      float new_x_ubound = mouse_x - drag_start_x;
-      float new_y_lbound = drag_start_y;
-      float new_y_ubound = mouse_y - drag_start_y;
+      double new_x_lbound = drag_start_x;
+      double new_x_ubound = mouse_x - drag_start_x;
+      double new_y_lbound = drag_start_y;
+      double new_y_ubound = mouse_y - drag_start_y;
 
       // Actually draws the box
-      SDL_FRect select_box = {drag_start_x, drag_start_y, mouse_x-drag_start_x, mouse_y-drag_start_y};
+      SDL_FRect select_box = {(float)drag_start_x, (float)drag_start_y, 
+                              (float)mouse_x-(float)drag_start_x,
+                              (float)mouse_y-(float)drag_start_y};
       SDL_RenderRect(renderer, &select_box);
 
     }
@@ -179,10 +181,10 @@ int main(int argc, char* argv[]) {
       }
 
       // Boundary recomputation, accounting for squaring
-      float c_real_start = x_lbound + (drag_start_x / WIDTH) * (x_ubound - x_lbound);
-      float c_imag_start = y_lbound + (drag_start_y / HEIGHT) * (y_ubound - y_lbound);
-      float c_real_end = x_lbound + (drag_end_x / WIDTH) * (x_ubound - x_lbound);
-      float c_imag_end = y_lbound + (drag_end_y / HEIGHT) * (y_ubound - y_lbound);
+      double c_real_start= map_pixel(x_lbound, x_ubound, drag_start_x, WIDTH);
+      double c_imag_start= map_pixel(y_lbound, y_ubound, drag_start_y, HEIGHT);
+      double c_real_end= map_pixel(x_lbound, x_ubound, drag_end_x, WIDTH);
+      double c_imag_end= map_pixel(y_lbound, y_ubound, drag_end_y, HEIGHT);
 
       /*
         Boundary Setup
@@ -206,8 +208,8 @@ int main(int argc, char* argv[]) {
                                       new_y_lbound, new_y_ubound);
 
 
-      float mouse_real_zoom = map_pixel(new_x_lbound, new_x_ubound, mouse_x, WIDTH);
-      float mouse_imag_zoom = map_pixel(new_y_lbound, new_y_ubound, mouse_y, HEIGHT);
+      double mouse_real_zoom = map_pixel(new_x_lbound, new_x_ubound, mouse_x, WIDTH);
+      double mouse_imag_zoom = map_pixel(new_y_lbound, new_y_ubound, mouse_y, HEIGHT);
 
       SDL_RenderClear(renderer);
       SDL_UpdateTexture(texture, NULL, pixels.data(), WIDTH * sizeof(uint32_t));
