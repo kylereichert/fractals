@@ -2,30 +2,39 @@
 #include "SDL3/SDL_mouse.h"
 #include "SDL3/SDL_oldnames.h"
 #include "SDL3/SDL_pixels.h"
+#include "SDL3/SDL_rect.h"
 #include "SDL3/SDL_render.h"
 #include "SDL3/SDL_stdinc.h"
 #include "SDL3/SDL_timer.h"
 #include <SDL3/SDL.h>
 #include <SDL3/SDL_main.h>
+#include <cstddef>
 #include <cstdint>
 #include <iostream>
 #include <vector>
+#include <algorithm>
+#include <cmath>
 #include "math.h"
 
-std::vector<uint32_t> mandelbrot(int WIDTH, int HEIGHT, std::vector<uint32_t>& pixels) {
+std::vector<uint32_t> mandelbrot(int WIDTH, 
+                                 int HEIGHT,
+                                 std::vector<uint32_t>& pixels,
+                                 double x_lbound = -2, double x_ubound = 1,
+                                 double y_lbound = -1.5, double y_ubound = 1.5
+                                 ) {
   double SCALE = 50;
   int max_iters = 100;
-  double x_lbound = -2, x_ubound = 1;
-  double y_lbound = -1.5, y_ubound = 1.5;
 
   for (int x = 0; x < WIDTH; x++) {
       for (int y = 0; y < HEIGHT; y++) {
           double zr = 0.0, zi = 0.0;
           int iters = 0;
 
+          // Maps the coordinates to the window's pixel counts
           double cr = x_lbound + ((double)x / WIDTH)  * (x_ubound - x_lbound);
           double ci = y_lbound + ((double)y / HEIGHT) * (y_ubound - y_lbound);
 
+          // The actual Mandelbrot algorithm
           while (zr*zr + zi*zi < 4.0 && iters < max_iters) {
               double zr_next = zr*zr - zi*zi + cr;
               double zi_next = 2*zr*zi + ci;
@@ -53,7 +62,7 @@ std::vector<uint32_t> mandelbrot(int WIDTH, int HEIGHT, std::vector<uint32_t>& p
 }
 
 int main(int argc, char* argv[]) {
-  
+  // Window size 
   const int WIDTH = 800;
   const int HEIGHT = 800;
 
@@ -81,15 +90,7 @@ int main(int argc, char* argv[]) {
   bool quit = false;
   SDL_Event event;
 
-  // double SCALE = 50;
-  // int max_iters = 100;
-  // double x_lbound = -2, x_ubound = 1;
-  // double y_lbound = -1.5, y_ubound = 1.5;
-
-  // double x_lbound = 15.0/SCALE, x_ubound = 17.0/SCALE;
-  // double y_lbound = 0.5/SCALE, y_ubound = 2.5/SCALE;
-
-
+  // Initial Mandelbrot texture
   std::vector<uint32_t> pixels_init(WIDTH * HEIGHT, 0);
   std::vector<uint32_t> pixels = mandelbrot(WIDTH, HEIGHT, pixels_init);
   SDL_UpdateTexture(texture, NULL, pixels.data(), WIDTH * sizeof(uint32_t));
@@ -103,10 +104,9 @@ int main(int argc, char* argv[]) {
   // double cr = x_lbound + ((double)x / WIDTH)  * (x_ubound - x_lbound);
 
   bool dragging = false;
+  bool drag_release = false;
   float drag_start_x, drag_start_y;
   float drag_end_x, drag_end_y;
-
-
 
 
   // 3. The Main Loop
@@ -117,48 +117,100 @@ int main(int argc, char* argv[]) {
           quit = true;
       }
 
-      // Testing mouse button presses
+      // Grabs mouse events for creating the zoom box
       if (event.type == SDL_EVENT_MOUSE_BUTTON_DOWN) {
         dragging = true;
         drag_start_x = event.button.x;
         drag_start_y = event.button.y;
-        // SDL_SetRenderDrawColor(renderer, 20, 20, 30, 255); // Dark Background
       }
       if (event.type == SDL_EVENT_MOUSE_BUTTON_UP) {
+        drag_end_x = event.button.x;
+        drag_end_y = event.button.y;
         dragging = false;
+        drag_release = true;
       }
 
-      }
-    // This is outside the polling event
-
+    }
     
-    // Coordinate locations at mouse pointer 
+    SDL_SetRenderVSync(renderer, 1); // Set the framerate, PC goin cray cray
+
+    // Coordinate locations at mouse cursor
     SDL_GetMouseState(&mouse_x, &mouse_y);
     mouse_real = x_lbound + (mouse_x / WIDTH) * (x_ubound - x_lbound);
     mouse_imag = y_lbound + (mouse_y / HEIGHT) * (y_ubound - y_lbound);
 
-
+    // Clear old frame -> render new frame -> render over top of that frame
     SDL_RenderClear(renderer);
     SDL_RenderTexture(renderer, texture, NULL, NULL);
     SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    // SDL_RenderDebugTextFormat(renderer, 10.0f, 10.0f, "Location: %.0f, %.0f", *mouse_x, *mouse_y);
     SDL_RenderDebugTextFormat(renderer, 10.0f, 10.0f, "Location: %4.2f, %4.2f", mouse_real, -mouse_imag);
 
     if (dragging) {
-      SDL_RenderDebugTextFormat(renderer, 10.0f, 10.0f, "Draggin: %4.2f, %4.2f", mouse_real, -mouse_imag);
+      // New boundaries for rectangle and zoom
+      float new_x_lbound = drag_start_x;
+      float new_x_ubound = mouse_x - drag_start_x;
+      float new_y_lbound = drag_start_y;
+      float new_y_ubound = mouse_y - drag_start_y;
+
+      // Actually draws the box
+      SDL_FRect select_box = {drag_start_x, drag_start_y, mouse_x-drag_start_x, mouse_y-drag_start_y};
+      SDL_RenderRect(renderer, &select_box);
+
     }
 
+    // Zoom function. Will zoom using selected coordinates as new boundaries.
+    if (drag_release) {
+      // Match the pixel counts in the boundaries so the image doesn't skew
+      int x_pixel_diff = abs(drag_end_x - drag_start_x);
+      int y_pixel_diff = abs(drag_end_y - drag_start_y);
+
+      // Find which direction is larger and subtract that from the larger axis
+      if (x_pixel_diff > y_pixel_diff) {
+        int offset = x_pixel_diff - y_pixel_diff;
+        drag_end_x -= offset;
+      } else {
+        int offset = y_pixel_diff - x_pixel_diff;
+        drag_end_y -= offset;
+      }
+
+      // Boundary recomputation, accounting for squaring
+      float c_real_start = x_lbound + (drag_start_x / WIDTH) * (x_ubound - x_lbound);
+      float c_imag_start = y_lbound + (drag_start_y / HEIGHT) * (y_ubound - y_lbound);
+      float c_real_end = x_lbound + (drag_end_x / WIDTH) * (x_ubound - x_lbound);
+      float c_imag_end = y_lbound + (drag_end_y / HEIGHT) * (y_ubound - y_lbound);
+
+      /*
+        Boundary Setup
+        Need to consider endpoints. If the square starts bottom right and moves
+        up and left, need to swap the upper and lower bounds so the make sense
+      */
+
+      auto result_real = std::minmax(c_real_start, c_real_end);
+      auto result_imag = std::minmax(c_imag_start, c_imag_end);
+
+      double new_x_lbound = result_real.first;
+      double new_x_ubound = result_real.second;
+      double new_y_lbound = result_imag.first;
+      double new_y_ubound = result_imag.second;
+
+      std::vector<uint32_t> pixels_zoom(WIDTH * HEIGHT, 0);
+      // std::vector<uint32_t> pixels = mandelbrot(WIDTH, HEIGHT, pixels_init);
+      std::vector<uint32_t> pixels = mandelbrot(WIDTH, HEIGHT,
+                                      pixels_init,
+                                      new_x_lbound, new_x_ubound,
+                                      new_y_lbound, new_y_ubound);
+
+
+      SDL_UpdateTexture(texture, NULL, pixels.data(), WIDTH * sizeof(uint32_t));
+
+
+
+      // std::cout << "Its working?:" << mouse_real << " " << drag_end_y << '\n';
+      drag_release = false;
+    }
+
+
     SDL_RenderPresent(renderer);
-    // 4. Rendering
-    // SDL_SetRenderDrawColor(renderer, 20, 20, 30, 255); // Dark Background
-    // SDL_RenderClear(renderer);
-
-    // // Draw a simple white rectangle (your "player" or "particle")
-    // SDL_FRect rect = { 350.0f, 250.0f, 100.0f, 100.0f };
-    // SDL_SetRenderDrawColor(renderer, 255, 255, 255, 255);
-    // SDL_RenderFillRect(renderer, &rect);
-
-    // SDL_RenderPresent(renderer);
   }
 
   // 5. Cleanup
