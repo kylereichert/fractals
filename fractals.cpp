@@ -28,7 +28,7 @@ std::vector<uint32_t> mandelbrot(int WIDTH,
                                  double y_lbound = -1.5, double y_ubound = 1.5
                                  ) {
   double SCALE = 50;
-  int max_iters = 400;
+  int max_iters = 600;
 
   for (int x = 0; x < WIDTH; x++) {
       for (int y = 0; y < HEIGHT; y++) {
